@@ -26,13 +26,51 @@ trap "error_handler" ERR INT TERM
 ## IP address of the VPN server.
 ## Get the IP using: nslookup vpn-example-server.org
 ## Example: seattle.vpn.riseup.net
-VPN_SERVER=198.252.153.26
+#VPN_SERVER=46.246.32.2
+
+help() {
+	cat << EOF
+	Simple VPN Firewall
+	-------------------------------
+		by Felix bauer
+		very much based on adrelanos vpn-firewall https://github.com/adrelanos/VPN-Firewall
+
+		$0 [-in {ACCEPT|DROP}] [IP|DNS]
+			-in 		defines iptables INPUT policy
+			IP|DNS		OUTPUT is allowed to those hosts only
+
+	comes with absolutely NO WARRANTY
+EOF
+exit 1
+}
+
+if [ $# -eq 0 ] || [ $1 == "-h" ] || [ $1 == "--help" ]; then
+	help
+fi
+
+polINPUT="DROP"
+
+if [ $# -gt 0 ]; then
+	if [ $1 == "-in" ]; then
+		polINPUT=$2
+		shift 2
+	fi
+fi
+echo "INPUT policy "$polINPUT
+
+		
+
+if [ $# -gt 0 ]; then
+	VPN_SERVER=$@
+else
+	VPN_SERVER=78.42.6.160
+fi
 
 ## For OpenVPN.
 VPN_INTERFACE=tun0
 
 ## Destinations you don not want routed through the VPN.
-LOCAL_NET="192.168.1.0/24 192.168.0.0/24 127.0.0.0/8"
+LOCAL_NET="192.168.0.0/16 127.0.0.0/8 10.0.0.0/8"
 
 ######################################################################
 ## DO NOT CHANGE ANYTHING BELOW, UNLESS YOU KNOW WHAT YOU ARE DOING! #
@@ -73,7 +111,7 @@ echo "OK: Loading VPN firewall..."
 ###########################
 
 ## Set secure defaults.
-iptables -P INPUT DROP
+iptables -P INPUT $polINPUT
 
 ## FORWARD rules does not actually do anything if forwarding is disabled. Better be safe just in case.
 iptables -P FORWARD DROP
@@ -128,11 +166,14 @@ iptables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
 iptables -A INPUT -i "$VPN_INTERFACE" -j ACCEPT
 
 ## Log.
-iptables -A INPUT -j LOG --log-prefix "VPN firewall blocked input4: "
+if [ $polINPUT == "DROP" ]; then
+	echo "LOG INPUT RUBBISH"
+	iptables -A INPUT -j LOG --log-prefix "VPN firewall blocked input4: "
+fi
 
 ## Reject anything not explicitly allowed above.
 ## Drop is better than reject here, because ...
-iptables -A INPUT -j DROP
+iptables -A INPUT -j $polINPUT
 
 ###########################
 ## IPv4 FORWARD
@@ -152,7 +193,21 @@ iptables -A FORWARD -j REJECT --reject-with icmp-admin-prohibited
 iptables -A OUTPUT -o "$VPN_INTERFACE" -j ACCEPT
 
 ## XXX
-iptables -A OUTPUT -d "$VPN_SERVER" -j ACCEPT
+iptables -P OUTPUT ACCEPT
+for i in $VPN_SERVER; do
+	if [[ "$i"  =~ [0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3} ]]; then
+		iptables -A OUTPUT -d "$i" -j ACCEPT
+		echo "out to $i allowed"
+	else
+		echo "resolve $i"
+		dig $i A +noauthority +noadditional +nocomments +noquestion | sed -n "s/.*IN[[:space:]]A[[:space:]]\([0-9\.]*\)/\1/p" | while read j; do
+			iptables -A OUTPUT -d "$j" -j ACCEPT
+			echo "out to $j allowed"
+		done
+	fi
+done
+set +x
+iptables -P OUTPUT DROP
 
 ## Existing connections are accepted.
 iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
