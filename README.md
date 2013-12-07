@@ -1,3 +1,17 @@
+# What was changed
+Stand alone bash script.
+
+New arguments
+[-in {ACCEPT|DROP}] [IP|DNS]
+-in {ACCEPT|DROP} to set INPUT policy
+[IP|DNS] to specify allowed tunnel gateway
+
+
+
+
+*thanks to adrelanos
+
+
 # Why
 If you simply add a VPN using common instructions, it generally fails open. That means, if the VPN breaks down, because the connection is interrupted, traffic will be send without the VPN.
 
