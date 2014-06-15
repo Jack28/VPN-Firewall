@@ -1,11 +1,27 @@
-# What was changed
+Simple VPN Firewall
+-------------------------------
+		by Felix bauer
+		very much based on adrelanos vpn-firewall https://github.com/adrelanos/VPN-Firewall
+
+		/home/felix/bin/vpnfirewall [-in {ACCEPT|DROP}] (IP|DNS)
+			-in 		defines iptables INPUT policy
+			IP|DNS		OUTPUT is allowed to those hosts only
+
+		alternatively allowed outgoing connections can be added with
+		/home/felix/bin/vpnfirewall ALLOW (IP|DNS)
+
+	comes with absolutely NO WARRANTY
+
+
+
+# Changes
 Stand alone bash script.
 
 New arguments
 [-in {ACCEPT|DROP}] [IP|DNS]
 -in {ACCEPT|DROP} to set INPUT policy
 [IP|DNS] to specify allowed tunnel gateway
-
+ALLOW (IP|DNS)
 
 
 

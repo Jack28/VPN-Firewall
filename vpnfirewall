@@ -32,17 +32,36 @@ help() {
 	cat << EOF
 	Simple VPN Firewall
 	-------------------------------
-		by Felix bauer
+		by Felix Bauer
 		very much based on adrelanos vpn-firewall https://github.com/adrelanos/VPN-Firewall
 
-		$0 [-in {ACCEPT|DROP}] [IP|DNS]
+		$0 [-in {ACCEPT|DROP}] (IP|DNS)
 			-in 		defines iptables INPUT policy
 			IP|DNS		OUTPUT is allowed to those hosts only
+
+		alternatively allowed outgoing connections can be added with
+		$0 ALLOW (IP|DNS) # NOTICE, it has to be in capital
 
 	comes with absolutely NO WARRANTY
 EOF
 exit 1
 }
+
+addAllowOut() {
+for i in $@; do
+	if [[ "$i"  =~ [0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3} ]]; then
+		iptables -I OUTPUT 2 -d "$i" -j ACCEPT
+		echo "out to $i allowed"
+	else
+		echo "resolve $i"
+		dig $i A +noauthority +noadditional +nocomments +noquestion | sed -n "s/.*IN[[:space:]]A[[:space:]]\([0-9\.]*\)/\1/p" | while read j; do
+			iptables -I OUTPUT 2 -d "$j" -j ACCEPT
+			echo "out to $j allowed"
+		done
+	fi
+done
+}
+
 
 if [ $# -eq 0 ] || [ $1 == "-h" ] || [ $1 == "--help" ]; then
 	help
@@ -55,6 +74,11 @@ if [ $# -gt 0 ]; then
 		polINPUT=$2
 		shift 2
 	fi
+	if [ $1 == "ALLOW" ]; then
+		shift 1
+		addAllowOut $@
+		exit 0
+	fi
 fi
 echo "INPUT policy "$polINPUT
 
@@ -63,7 +87,7 @@ echo "INPUT policy "$polINPUT
 if [ $# -gt 0 ]; then
 	VPN_SERVER=$@
 else
-	VPN_SERVER=78.42.6.160
+	VPN_SERVER=1.1.1.1
 fi
 
 ## For OpenVPN.
@@ -194,18 +218,9 @@ iptables -A OUTPUT -o "$VPN_INTERFACE" -j ACCEPT
 
 ## XXX
 iptables -P OUTPUT ACCEPT
-for i in $VPN_SERVER; do
-	if [[ "$i"  =~ [0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3} ]]; then
-		iptables -A OUTPUT -d "$i" -j ACCEPT
-		echo "out to $i allowed"
-	else
-		echo "resolve $i"
-		dig $i A +noauthority +noadditional +nocomments +noquestion | sed -n "s/.*IN[[:space:]]A[[:space:]]\([0-9\.]*\)/\1/p" | while read j; do
-			iptables -A OUTPUT -d "$j" -j ACCEPT
-			echo "out to $j allowed"
-		done
-	fi
-done
+
+addAllowOut $VPN_SERVER
+
 set +x
 iptables -P OUTPUT DROP
 
