@@ -39,8 +39,8 @@ help() {
 			-in 		defines iptables INPUT policy
 			IP|DNS		OUTPUT is allowed to those hosts only
 
-		alternatively allowed outgoing connections can be added with
-		$0 ALLOW (IP|DNS) # NOTICE, it has to be in capital
+		alternatively outgoing connections can be allowed with
+		$0 ALLOW (IP|DNS) # NOTE: it has to be in upper case
 
 	comes with absolutely NO WARRANTY
 EOF
@@ -94,7 +94,7 @@ fi
 VPN_INTERFACE=tun0
 
 ## Destinations you don not want routed through the VPN.
-LOCAL_NET="192.168.0.0/16 127.0.0.0/8 10.0.0.0/8"
+LOCAL_NET="192.168.0.0/16 172.0.0.0/8 10.0.0.0/8"
 
 ######################################################################
 ## DO NOT CHANGE ANYTHING BELOW, UNLESS YOU KNOW WHAT YOU ARE DOING! #
@@ -215,6 +215,7 @@ iptables -A FORWARD -j REJECT --reject-with icmp-admin-prohibited
 
 ## XXX
 iptables -A OUTPUT -o "$VPN_INTERFACE" -j ACCEPT
+iptables -A OUTPUT -o lo -j ACCEPT
 
 ## XXX
 iptables -P OUTPUT ACCEPT
@@ -243,7 +244,7 @@ iptables -A OUTPUT -j REJECT --reject-with icmp-admin-prohibited
 ###########################
 
 ## Policy DROP for all traffic as fallback.
-ip6tables -P INPUT DROP
+ip6tables -P INPUT $polINPUT
 ip6tables -P OUTPUT DROP
 ip6tables -P FORWARD DROP
 
@@ -252,23 +253,31 @@ ip6tables -F
 ip6tables -X
 ip6tables -t mangle -F
 ip6tables -t mangle -X
- 
+
 ## Allow unlimited access on loopback.
 ## Not activated, since we do not need it.
-#ip6tables -A INPUT -i lo -j ACCEPT
-#ip6tables -A OUTPUT -o lo -j ACCEPT
+ip6tables -A INPUT -i lo -j ACCEPT
+ip6tables -A OUTPUT -o lo -j ACCEPT
 
 ## Log.
 #ip6tables -A INPUT -j LOG --log-prefix "VPN firewall blocked input6: "
 #ip6tables -A OUTPUT -j LOG --log-prefix "VPN firewall blocked output6: "
 #ip6tables -A FORWARD -j LOG --log-prefix "VPN firewall blocked forward6: "
 
-## Drop/reject all other traffic.
-ip6tables -A INPUT -j DROP
+## Allow on VPN interface only.
+ip6tables -A INPUT -i "$VPN_INTERFACE" -j ACCEPT
+ip6tables -A INPUT -j $polINPUT
 ## --reject-with icmp-admin-prohibited not supported by ip6tables
+ip6tables -A OUTPUT -o "$VPN_INTERFACE" -j ACCEPT
 ip6tables -A OUTPUT -j REJECT
 ## --reject-with icmp-admin-prohibited not supported by ip6tables
 ip6tables -A FORWARD -j REJECT
+
+
+## Established incoming connections are accepted.
+ip6tables -A INPUT -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+## Allow all incoming connections on the virtual VPN network interface.
 
 ###########################
 ## End
